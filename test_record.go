@@ -26,7 +26,7 @@ func parseTestRecord(reader *LineReader) (TestRecord, error) {
 			break
 		}
 
-		_, err = reader.Peek()
+		_, err = reader.Read()
 		if err != nil {
 			return nil, err
 		}
