@@ -20,5 +20,8 @@ func parseHalt(reader *LineReader) (*HaltRecord, error) {
 }
 
 func (r *HaltRecord) Execute(ctx *TestContext) error {
+	if ctx.shouldSkip() {
+		return nil
+	}
 	return fmt.Errorf("halt statement. context: %v", ctx)
 }
