@@ -12,6 +12,16 @@ type TestScript struct {
 }
 
 type TestResult struct {
+	success int
+	failure int
+}
+
+func (t *TestResult) Success() int {
+	return t.success
+}
+
+func (t *TestResult) Failure() int {
+	return t.failure
 }
 
 func ParseTestScript(r io.Reader) (*TestScript, error) {
@@ -46,5 +56,5 @@ func (t *TestScript) Run(db *sql.DB, dbName string, logger *log.Logger) *TestRes
 		}
 	}
 
-	return &TestResult{}
+	return &TestResult{success: success, failure: failure}
 }
