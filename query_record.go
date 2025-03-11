@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 )
@@ -90,6 +91,9 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 	resultHash := ""
 	line, err = reader.Read()
 	if err != nil {
+		if err == io.EOF {
+			return &QueryRecord{typeString: typeString, sortMode: sortMode, label: label, query: query, resultSize: 0, LineReporter: LineReporter{startLine: startLine, endLine: reader.Count()}}, nil
+		}
 		return nil, fmt.Errorf("failed to parse query (results): %v", err)
 	}
 	_, err = fmt.Sscanf(line, "%d values hashing to %s", &resultSize, &resultHash)
@@ -101,7 +105,7 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 	resultSet = append(resultSet, line)
 	for {
 		line, err := reader.Read()
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("failed to parse query (result-set): %v", err)
 		}
 
@@ -148,7 +152,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	results := make([][]string, 0)
 	for rr.Next() {
 		if err := rr.Scan(pointers...); err != nil {
-			return err
+			return fmt.Errorf("lines %d - %d : %w", r.GetStartLine(), r.GetEndLine(), err)
 		}
 
 		rowResults := make([]string, 0)
@@ -190,7 +194,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 
 		for i := 0; i < len(results); i++ {
 			if allResults[i] != r.resultSet[i] {
-				return fmt.Errorf("result set does not match. difference found on index %d\nexpected: %v\nfound: %v\n%q\n%q", i, r.resultSet, allResults, r.query, formats)
+				return fmt.Errorf("result set does not match. difference found on index %d\nexpected: %v\nfound: %v\n%q", i, r.resultSet, allResults, r.query)
 			}
 		}
 	}

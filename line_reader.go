@@ -18,7 +18,7 @@ func NewLineReader(r io.Reader) *LineReader {
 
 func (r *LineReader) Peek() (string, error) {
 	if r.buffer == nil {
-		line, err := r.Scan()
+		line, err := r.Read()
 		if err != nil {
 			return "", nil
 		}
@@ -31,7 +31,7 @@ func (r *LineReader) Peek() (string, error) {
 	return *r.buffer, nil
 }
 
-func (r *LineReader) Scan() (string, error) {
+func (r *LineReader) Read() (string, error) {
 	if r.buffer != nil {
 		line := *r.buffer
 		r.buffer = nil
@@ -42,6 +42,8 @@ func (r *LineReader) Scan() (string, error) {
 	r.lineCount++
 	if r.scanner.Scan() {
 		line := r.scanner.Text()
+		ss := strings.SplitN(line, "#", 2)
+		line = strings.TrimSpace(ss[0])
 		return line, nil
 	}
 
@@ -49,19 +51,6 @@ func (r *LineReader) Scan() (string, error) {
 		return "", io.EOF
 	} else {
 		return "", err
-	}
-}
-
-func (r *LineReader) Read() (string, error) {
-	for {
-		line, err := r.Scan()
-		if err != nil {
-			return "", err
-		}
-
-		if !strings.HasPrefix(line, "#") {
-			return line, nil
-		}
 	}
 }
 

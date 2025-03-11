@@ -2,6 +2,7 @@ package sqllogictest
 
 import (
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -38,7 +39,7 @@ func parseStatement(reader *LineReader) (*StatementRecord, error) {
 	statement := ""
 	for {
 		line, err := reader.Read()
-		if err != nil {
+		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("could not read sentence for statement: %v", err)
 		}
 
