@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -132,18 +133,14 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	pointers := make([]any, 0)
 	formats := make([]string, 0)
 	for _, t := range r.typeString {
+		pointers = append(pointers, &sql.NullString{})
+
 		switch t {
 		case 'T':
-			var a sql.NullString
-			pointers = append(pointers, &a)
 			formats = append(formats, "%s")
 		case 'I':
-			var a sql.NullInt64
-			pointers = append(pointers, &a)
 			formats = append(formats, "%d")
 		case 'R':
-			var a sql.NullFloat64
-			pointers = append(pointers, &a)
 			formats = append(formats, "%.3f")
 		default:
 			return fmt.Errorf("could not parse type-string: %q", r.typeString)
@@ -158,7 +155,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 
 		rowResults := make([]string, 0)
 		for i := 0; i < len(pointers); i++ {
-			rowResults = append(rowResults, printValue(formats[i], pointers[i]))
+			rowResults = append(rowResults, printValue(formats[i], pointers[i].(*sql.NullString)))
 		}
 
 		results = append(results, rowResults)
@@ -184,7 +181,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 
 	if r.resultHash != "" {
 		if len(allResults) != r.resultSize {
-			return fmt.Errorf("result set does not match. difference in size: %d vs %d\n%q", len(allResults), len(r.resultSet), r.query)
+			return fmt.Errorf("result set does not match. difference in size: %d vs %d\n%q", len(allResults), r.resultSize, r.query)
 		}
 		if hex.EncodeToString(hasher.Sum(nil)) != r.resultHash {
 			return fmt.Errorf("result set does not match. difference in hash: %s vs %s\n%q", hex.EncodeToString(hasher.Sum(nil)), r.resultHash, r.query)
@@ -208,23 +205,27 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	return nil
 }
 
-func printValue(f string, a any) string {
-	switch v := a.(type) {
-	case *sql.NullString:
-		if !v.Valid {
-			return "NULL"
-		}
-		return fmt.Sprintf(f, v.String)
-	case *sql.NullInt64:
-		if !v.Valid {
-			return "NULL"
-		}
-		return fmt.Sprintf(f, v.Int64)
-	case *sql.NullFloat64:
-		if !v.Valid {
-			return "NULL"
-		}
-		return fmt.Sprintf(f, v.Float64)
+func printValue(f string, v *sql.NullString) string {
+	if !v.Valid {
+		return "NULL"
 	}
-	return fmt.Sprintf(f, a)
+
+	switch f {
+	case "%s":
+		return v.String
+	case "%d":
+		p, err := strconv.ParseFloat(v.String, 64)
+		if err != nil {
+			p = 0
+		}
+		return fmt.Sprintf(f, int(p))
+	case "%.3f":
+		p, err := strconv.ParseFloat(v.String, 64)
+		if err != nil {
+			p = 0
+		}
+		return fmt.Sprintf(f, p)
+	default:
+		panic("Invalid format string: " + f)
+	}
 }
