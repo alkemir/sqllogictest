@@ -28,11 +28,12 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+	line = strings.TrimSpace(line)
 
 	startLine := reader.Count()
 	paramsSplit := strings.Split(line, " ")
 	if len(paramsSplit) < 2 {
-		return nil, fmt.Errorf("unexpected number of parameters for query: %d %q", len(paramsSplit), line)
+		return nil, fmt.Errorf("unexpected number of parameters for query on line %d: %d %q", reader.Count(), len(paramsSplit), line)
 	}
 
 	typeString := paramsSplit[1]
@@ -43,25 +44,25 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 		switch paramsSplit[i] {
 		case "nosort":
 			if sortMode != "" {
-				return nil, fmt.Errorf("illegal parameter for query (sort-mode): %v", paramsSplit)
+				return nil, fmt.Errorf("illegal parameter for query (sort-mode) on line %d: %v", reader.Count(), paramsSplit)
 			}
 			sortMode = "nosort"
 
 		case "rowsort":
 			if sortMode != "" {
-				return nil, fmt.Errorf("illegal parameter for query (sort-mode): %v", paramsSplit)
+				return nil, fmt.Errorf("illegal parameter for query (sort-mode) on line %d: %v", reader.Count(), paramsSplit)
 			}
 			sortMode = "rowsort"
 
 		case "valuesort":
 			if sortMode != "" {
-				return nil, fmt.Errorf("illegal parameter for query (sort-mode): %v", paramsSplit)
+				return nil, fmt.Errorf("illegal parameter for query (sort-mode) on line %d: %v", reader.Count(), paramsSplit)
 			}
 			sortMode = "valuesort"
 
 		default:
 			if label != "" {
-				return nil, fmt.Errorf("illegal parameter for query (label): %v", paramsSplit)
+				return nil, fmt.Errorf("illegal parameter for query (label) on line %d: %v", reader.Count(), paramsSplit)
 			}
 			label = paramsSplit[i]
 		}
@@ -74,7 +75,7 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 	for {
 		line, err := reader.Read()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse query (query): %v", err)
+			return nil, fmt.Errorf("failed to parse query (query) on line %d: %w", reader.Count(), err)
 		}
 
 		if line == "" {
@@ -94,7 +95,7 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 		if err == io.EOF {
 			return &QueryRecord{typeString: typeString, sortMode: sortMode, label: label, query: query, resultSize: 0, LineReporter: LineReporter{startLine: startLine, endLine: reader.Count()}}, nil
 		}
-		return nil, fmt.Errorf("failed to parse query (results): %v", err)
+		return nil, fmt.Errorf("failed to parse query (results) on line %d: %w", reader.Count(), err)
 	}
 	_, err = fmt.Sscanf(line, "%d values hashing to %s", &resultSize, &resultHash)
 	if err == nil || line == "" {
@@ -106,7 +107,7 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 	for {
 		line, err := reader.Read()
 		if err != nil && err != io.EOF {
-			return nil, fmt.Errorf("failed to parse query (result-set): %v", err)
+			return nil, fmt.Errorf("failed to parse query (result-set) on line %d: %w", reader.Count(), err)
 		}
 
 		if line == "" {
@@ -152,7 +153,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	results := make([][]string, 0)
 	for rr.Next() {
 		if err := rr.Scan(pointers...); err != nil {
-			return fmt.Errorf("lines %d - %d : %w", r.GetStartLine(), r.GetEndLine(), err)
+			return fmt.Errorf("could not scan row: %w", err)
 		}
 
 		rowResults := make([]string, 0)
@@ -178,6 +179,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	hasher := md5.New()
 	for _, s := range allResults {
 		hasher.Write([]byte(s))
+		hasher.Write([]byte("\n"))
 	}
 
 	if r.resultHash != "" {
@@ -185,7 +187,7 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 			return fmt.Errorf("result set does not match. difference in size: %d vs %d\n%q", len(allResults), len(r.resultSet), r.query)
 		}
 		if hex.EncodeToString(hasher.Sum(nil)) != r.resultHash {
-			//return fmt.Errorf("result set does not match. difference in hash: %s vs %s\n%q", hex.EncodeToString(hasher.Sum(nil)), r.resultHash, r.query)
+			return fmt.Errorf("result set does not match. difference in hash: %s vs %s\n%q", hex.EncodeToString(hasher.Sum(nil)), r.resultHash, r.query)
 		}
 	} else {
 		if len(allResults) != len(r.resultSet) {
