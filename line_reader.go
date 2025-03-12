@@ -43,7 +43,7 @@ func (r *LineReader) Read() (string, error) {
 	if r.scanner.Scan() {
 		line := r.scanner.Text()
 		ss := strings.SplitN(line, "#", 2)
-		line = strings.TrimSpace(ss[0])
+		line = ss[0]
 		return line, nil
 	}
 

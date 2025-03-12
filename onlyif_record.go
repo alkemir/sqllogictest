@@ -17,10 +17,11 @@ func parseOnlyIf(reader *LineReader) (*OnlyIfRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+	line = strings.TrimSpace(line)
 
 	paramsSplit := strings.Split(line, " ")
 	if len(paramsSplit) != 2 {
-		return nil, fmt.Errorf("unexpected number of tokens for onlyif: %d %q", len(paramsSplit), line)
+		return nil, fmt.Errorf("unexpected number of tokens for onlyif on line %d: %d %q", reader.Count(), len(paramsSplit), line)
 	}
 
 	return &OnlyIfRecord{dbName: paramsSplit[1], LineReporter: LineReporter{startLine: reader.Count(), endLine: reader.Count()}}, nil
