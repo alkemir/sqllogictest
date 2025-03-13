@@ -43,7 +43,7 @@ func ParseTestScript(r io.Reader) (*TestScript, error) {
 	return &TestScript{records: rr}, nil
 }
 
-func (t *TestScript) Run(db *sql.DB, dbName string, logger *log.Logger) *TestResult {
+func (t *TestScript) Run(db *sql.DB, dbName string, stopOnErr bool, logger *log.Logger) *TestResult {
 	success := 0
 	failure := 0
 	ctx := &TestContext{dbHandle: db, dbName: dbName}
@@ -51,6 +51,9 @@ func (t *TestScript) Run(db *sql.DB, dbName string, logger *log.Logger) *TestRes
 		if err := testRecord.Execute(ctx); err != nil {
 			logger.Printf("fail: %v\nwhile executing: %T\non lines: %d to %d\n", err, testRecord, testRecord.GetStartLine(), testRecord.GetEndLine())
 			failure++
+			if stopOnErr {
+				break
+			}
 		} else {
 			success++
 		}
