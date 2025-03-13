@@ -112,7 +112,7 @@ func parseQuery(reader *LineReader) (*QueryRecord, error) {
 		}
 
 		if line == "" {
-			return &QueryRecord{typeString: typeString, sortMode: sortMode, label: label, query: query, resultSet: resultSet, LineReporter: LineReporter{startLine: startLine, endLine: reader.Count()}}, nil
+			return &QueryRecord{typeString: typeString, sortMode: sortMode, label: label, query: query, resultSet: resultSet, resultSize: len(resultSet), LineReporter: LineReporter{startLine: startLine, endLine: reader.Count()}}, nil
 		}
 
 		resultSet = append(resultSet, line)
@@ -199,7 +199,10 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	}
 
 	if err := rr.Err(); err != nil {
-		return err
+		if r.resultSize == 0 {
+			return nil
+		}
+		return fmt.Errorf("error while iterating over result set: %w", err)
 	}
 
 	return nil
@@ -212,6 +215,9 @@ func printValue(f string, v *sql.NullString) string {
 
 	switch f {
 	case "%s":
+		if v.String == "" {
+			return "(empty)"
+		}
 		return v.String
 	case "%d":
 		p, err := strconv.ParseFloat(v.String, 64)
