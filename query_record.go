@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -130,11 +131,8 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	}
 	defer rr.Close()
 
-	pointers := make([]any, 0)
 	formats := make([]string, 0)
 	for _, t := range r.typeString {
-		pointers = append(pointers, &sql.NullString{})
-
 		switch t {
 		case 'T':
 			formats = append(formats, "%s")
@@ -149,13 +147,23 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 
 	results := make([][]string, 0)
 	for rr.Next() {
+		cc, err := rr.ColumnTypes()
+		if err != nil {
+			return err
+		}
+
+		pointers := make([]any, 0)
+		for _, ct := range cc {
+			pointers = append(pointers, reflect.New(ct.ScanType()).Interface())
+		}
+
 		if err := rr.Scan(pointers...); err != nil {
 			return fmt.Errorf("could not scan row: %w", err)
 		}
 
 		rowResults := make([]string, 0)
 		for i := 0; i < len(pointers); i++ {
-			rowResults = append(rowResults, printValue(formats[i], pointers[i].(*sql.NullString)))
+			rowResults = append(rowResults, printValue(formats[i], pointers[i]))
 		}
 
 		results = append(results, rowResults)
@@ -208,30 +216,79 @@ func (r *QueryRecord) Execute(ctx *TestContext) error {
 	return nil
 }
 
-func printValue(f string, v *sql.NullString) string {
-	if !v.Valid {
-		return "NULL"
-	}
+func printValue(f string, a any) string {
+	switch v := a.(type) {
+	case *sql.NullFloat64:
+		if !v.Valid {
+			return "NULL"
+		}
 
-	switch f {
-	case "%s":
-		if v.String == "" {
-			return "(empty)"
+		switch f {
+		case "%s":
+			return Sqlite3PrintFloat(v.Float64)
+		case "%d":
+			return fmt.Sprintf("%d", int(v.Float64))
+		case "%.3f":
+			return Sqlite3PrintFloat(v.Float64)
+		default:
+			panic("unknown format string: " + f)
 		}
-		return v.String
-	case "%d":
-		p, err := strconv.ParseFloat(v.String, 64)
-		if err != nil {
-			p = 0
+
+	case *sql.NullString:
+		if !v.Valid {
+			return "NULL"
 		}
-		return fmt.Sprintf(f, int(p))
-	case "%.3f":
-		p, err := strconv.ParseFloat(v.String, 64)
-		if err != nil {
-			p = 0
+
+		switch f {
+		case "%s":
+			if v.String == "" {
+				return "(empty)"
+			}
+
+			ret := ""
+			for _, r := range v.String {
+				if r < ' ' || r > '~' {
+					ret += "@"
+				} else {
+					ret += string(r)
+				}
+			}
+			return ret
+		case "%d":
+			d, err := strconv.ParseInt(v.String, 10, 64)
+			if err != nil {
+				return "0"
+			}
+
+			return fmt.Sprintf("%d", d)
+		case "%.3f":
+			f, err := strconv.ParseFloat(v.String, 64)
+			if err != nil {
+				return "0"
+			}
+
+			return Sqlite3PrintFloat(f)
+		default:
+			panic("unknown format string: " + f)
 		}
-		return fmt.Sprintf(f, p)
+
+	case *sql.NullInt64:
+		if !v.Valid {
+			return "NULL"
+		}
+
+		switch f {
+		case "%s":
+			return fmt.Sprintf("%d", v.Int64)
+		case "%d":
+			return fmt.Sprintf("%d", v.Int64)
+		case "%.3f":
+			return Sqlite3PrintFloat(float64(v.Int64))
+		default:
+			panic("unknown format string: " + f)
+		}
+
 	default:
-		panic("Invalid format string: " + f)
+		return "NULL"
 	}
 }
